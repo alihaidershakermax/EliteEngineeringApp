@@ -25,13 +25,37 @@ jobs:
       - name: Call flutter pub get
         run: flutter pub get
 
-      - name: Build iOS
-        run: flutter build ios --release --no-codesign
-
-      - name: Compress App Bundle
+      - name: Install Apple Certificate and Provisioning Profile
+        if: env.CERTIFICATE_P12 != ''
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          cd build/ios/iphoneos
-          zip -r Runner.app.zip Runner.app
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          # Import certificate
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+          # Import provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Build IPA
+        run: |
+          if [ -n "${{ secrets.CERTIFICATE_P12 }}" ]; then
+            flutter build ipa --release --export-method ad-hoc
+          else
+            flutter build ios --release --no-codesign
+            echo "Skipping IPA export as no certificate was found. Building .app instead."
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -41,6 +65,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            build/ios/iphoneos/Runner.app.zip
+            build/ios/ipa/*.ipa
+            build/ios/iphoneos/Runner.app
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
