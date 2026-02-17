@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,10 +32,16 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --debug # تم اختيار debug لسهولة التجربة بدون مفاتيح توقيع حالياً
+        run: flutter build apk --debug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: release-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          tag_name: latest
+          name: Latest Build
+          draft: false
+          prerelease: false
+          files: |
+            build/app/outputs/flutter-apk/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

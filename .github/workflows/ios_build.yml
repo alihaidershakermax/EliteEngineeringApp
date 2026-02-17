@@ -10,6 +10,9 @@ jobs:
   build:
     runs-on: macos-latest
 
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,8 +33,14 @@ jobs:
           cd build/ios/iphoneos
           zip -r Runner.app.zip Runner.app
 
-      - name: Upload iOS Artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ios-app-bundle
-          path: build/ios/iphoneos/Runner.app.zip
+          tag_name: latest
+          name: Latest Build
+          draft: false
+          prerelease: false
+          files: |
+            build/ios/iphoneos/Runner.app.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
